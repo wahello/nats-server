@@ -32,10 +32,10 @@ func TestNRGSimple(t *testing.T) {
 	rg.waitOnLeader()
 	// Do several state transitions.
 	rg.randomMember().(*stateAdder).proposeDelta(11)
-	rg.randomMember().(*stateAdder).proposeDelta(11)
-	rg.randomMember().(*stateAdder).proposeDelta(-22)
+	rg.randomMember().(*stateAdder).proposeDelta(22)
+	rg.randomMember().(*stateAdder).proposeDelta(33)
 	// Wait for all members to have the correct state.
-	rg.waitOnTotal(t, 0)
+	rg.waitOnTotal(t, 66)
 }
 
 func TestNRGSnapshotAndRestart(t *testing.T) {
