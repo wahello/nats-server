@@ -301,6 +301,7 @@ type raftChainStateMachine struct {
 	hash                       hash.Hash
 	blocksApplied              uint64
 	blocksAppliedSinceSnapshot uint64
+	stopped                    bool
 }
 
 // Block is just a random array of bytes, but contains a little extra metadata to track its source
@@ -317,10 +318,14 @@ func (sm *raftChainStateMachine) logDebug(format string, args ...any) {
 }
 
 func (sm *raftChainStateMachine) server() *Server {
+	sm.Lock()
+	defer sm.Unlock()
 	return sm.s
 }
 
 func (sm *raftChainStateMachine) node() RaftNode {
+	sm.Lock()
+	defer sm.Unlock()
 	return sm.n
 }
 
@@ -364,6 +369,9 @@ func (sm *raftChainStateMachine) leaderChange(isLeader bool) {
 		sm.logDebug("Leader change")
 	}
 	sm.leader = isLeader
+	if isLeader != sm.node().Leader() {
+		sm.logDebug("⚠️ Leader state out of sync with underlying node")
+	}
 }
 
 func (sm *raftChainStateMachine) stop() {
@@ -372,8 +380,10 @@ func (sm *raftChainStateMachine) stop() {
 	sm.n.Stop()
 
 	// Clear state, on restart it will be recovered from snapshot or peers
+	sm.stopped = true
 	sm.blocksApplied = 0
 	sm.hash.Reset()
+	sm.leader = false
 	sm.logDebug("Stopped")
 }
 
@@ -383,6 +393,7 @@ func (sm *raftChainStateMachine) restart() {
 
 	sm.logDebug("Restarting")
 
+	sm.stopped = false
 	if sm.n.State() != Closed {
 		return
 	}
@@ -455,12 +466,12 @@ func (sm *raftChainStateMachine) applyBlock(data []byte) {
 	sm.logDebug("Hash after %d blocks: %X ", sm.blocksApplied, sm.hash.Sum(nil))
 }
 
-func (sm *raftChainStateMachine) getCurrentHash() (uint64, string) {
+func (sm *raftChainStateMachine) getCurrentHash() (bool, uint64, string) {
 	sm.Lock()
 	defer sm.Unlock()
 
-	// Return the number of blocks applied and the current running hash
-	return sm.blocksApplied, fmt.Sprintf("%X", sm.hash.Sum(nil))
+	// Return running, the number of blocks applied and the current running hash
+	return !sm.stopped, sm.blocksApplied, fmt.Sprintf("%X", sm.hash.Sum(nil))
 }
 
 type chainHashSnapshot struct {

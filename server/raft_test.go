@@ -322,7 +322,15 @@ func TestRaftChainOneBlockInLockstep(t *testing.T) {
 				stateMachine.node().ID(),
 			)
 			checkFor(t, timeout, 500*time.Millisecond, func() error {
-				blocksCount, currentHash := stateMachine.getCurrentHash()
+				running, blocksCount, currentHash := stateMachine.getCurrentHash()
+				// All nodes always running
+				if !running {
+					return fmt.Errorf(
+						"node %s is not running",
+						nodeName,
+					)
+				}
+				// Node is behind
 				if blocksCount != iteration {
 					return fmt.Errorf(
 						"node %s applied %d blocks out of %d expected",
@@ -413,7 +421,15 @@ func TestRaftChainStopAndCatchUp(t *testing.T) {
 				stateMachine.node().ID(),
 			)
 			checkFor(t, timeout, 500*time.Millisecond, func() error {
-				blocksCount, currentHash := stateMachine.getCurrentHash()
+				running, blocksCount, currentHash := stateMachine.getCurrentHash()
+				// All nodes should be running
+				if !running {
+					return fmt.Errorf(
+						"node %s not running",
+						nodeName,
+					)
+				}
+				// Node is behind
 				if blocksCount != expectedBlocks {
 					return fmt.Errorf(
 						"node %s applied %d blocks out of %d expected",
@@ -466,10 +482,10 @@ func FuzzRaftChain(f *testing.F) {
 		checkConvergenceTimeout = 30 * time.Second
 	)
 
-	//RaftChainOptions.verbose = true
+	RaftChainOptions.verbose = true
 
 	// Cases to run when executed as unit test:
-	f.Add(100, int64(123456))
+	//f.Add(100, int64(123456))
 	f.Add(1000, int64(123456))
 
 	// Run in Fuzz mode to repeat maximizing coverage and looking for failing cases
@@ -560,16 +576,27 @@ func FuzzRaftChain(f *testing.F) {
 				b := strings.Builder{}
 				for _, sm := range rg {
 					csm := sm.(*raftChainStateMachine)
-					blocksCount, blockHash := csm.getCurrentHash()
-					b.WriteString(
-						fmt.Sprintf(
-							" [%s (%s): %d blocks, hash=%s],",
-							csm.server().Name(),
-							csm.node().ID(),
-							blocksCount,
-							blockHash,
-						),
-					)
+					running, blocksCount, blockHash := csm.getCurrentHash()
+					if running {
+						b.WriteString(
+							fmt.Sprintf(
+								" [%s (%s): %d blocks, hash=%s],",
+								csm.server().Name(),
+								csm.node().ID(),
+								blocksCount,
+								blockHash,
+							),
+						)
+					} else {
+						b.WriteString(
+							fmt.Sprintf(
+								" [%s (%s): STOPPED],",
+								csm.server().Name(),
+								csm.node().ID(),
+							),
+						)
+
+					}
 				}
 				return b.String()
 			}
@@ -657,10 +684,22 @@ func FuzzRaftChain(f *testing.F) {
 						checkConvergenceTimeout,
 						1*time.Second,
 						func() error {
-							referenceBlocksCount, referenceHash := rg[0].(*raftChainStateMachine).getCurrentHash()
+							referenceRunning, referenceBlocksCount, referenceHash := rg[0].(*raftChainStateMachine).getCurrentHash()
+							if !referenceRunning {
+								return fmt.Errorf(
+									"reference node not running",
+								)
+							}
 							for _, n := range rg {
 								sm := n.(*raftChainStateMachine)
-								blocksCount, blockHash := sm.getCurrentHash()
+								running, blocksCount, blockHash := sm.getCurrentHash()
+								if !running {
+									return fmt.Errorf(
+										"node not running: %s (%s)",
+										sm.server().Name(),
+										sm.node().ID(),
+									)
+								}
 								// Track the highest block seen
 								if blocksCount > highestBlocksCount {
 									t.Logf(
