@@ -24,6 +24,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"math/rand"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -112,12 +113,15 @@ func (c *cluster) createRaftGroupWithPeers(name string, servers []*Server, smf s
 	}
 
 	for _, s := range servers {
+		baseDir := filepath.Join(c.t.TempDir(), fmt.Sprintf("%s-%s", name, s.Name()))
+		logDir := filepath.Join(baseDir, "log")
+		storeDir := filepath.Join(baseDir, "store")
 		fs, err := newFileStore(
-			FileStoreConfig{StoreDir: c.t.TempDir(), BlockSize: defaultMediumBlockSize, AsyncFlush: false, SyncInterval: 5 * time.Minute},
+			FileStoreConfig{StoreDir: logDir, BlockSize: defaultMediumBlockSize, AsyncFlush: false, SyncInterval: 5 * time.Minute},
 			StreamConfig{Name: name, Storage: FileStorage},
 		)
 		require_NoError(c.t, err)
-		cfg := &RaftConfig{Name: name, Store: c.t.TempDir(), Log: fs}
+		cfg := &RaftConfig{Name: name, Store: storeDir, Log: fs}
 		s.bootstrapRaftNode(cfg, peers, true)
 		n, err := s.startRaftNode(globalAccountName, cfg, pprofLabels{})
 		require_NoError(c.t, err)
@@ -489,7 +493,11 @@ func (sm *raftChainStateMachine) snapshot() {
 		return
 	}
 
-	sm.logDebug("Snapshot (with %d blocks applied)", sm.blocksApplied)
+	sm.logDebug(
+		"Snapshot (with %d blocks applied, %d since last snapshot)",
+		sm.blocksApplied,
+		sm.blocksAppliedSinceSnapshot,
+	)
 
 	// Serialize the internal state of the hash block
 	serializedHash, err := sm.hash.(encoding.BinaryMarshaler).MarshalBinary()
