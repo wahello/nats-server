@@ -306,6 +306,8 @@ type raftChainStateMachine struct {
 	blocksApplied              uint64
 	blocksAppliedSinceSnapshot uint64
 	stopped                    bool
+	ready                      bool
+	safeSnapshots              bool
 }
 
 // Block is just a random array of bytes, but contains a little extra metadata to track its source
@@ -336,6 +338,9 @@ func (sm *raftChainStateMachine) node() RaftNode {
 func (sm *raftChainStateMachine) propose(data []byte) {
 	sm.Lock()
 	defer sm.Unlock()
+	if !sm.ready {
+		sm.logDebug("Refusing to propose during recovery")
+	}
 	err := sm.n.ForwardProposal(data)
 	if err != nil {
 		sm.logDebug("block proposal error: %s", err)
@@ -346,7 +351,9 @@ func (sm *raftChainStateMachine) applyEntry(ce *CommittedEntry) {
 	sm.Lock()
 	defer sm.Unlock()
 	if ce == nil {
-		// Nothing to apply
+		// A nil CE is a signal the previous recovery backlog is over
+		sm.logDebug("Recovery complete")
+		sm.ready = true
 		return
 	}
 	sm.logDebug("Apply entries #%d (%d entries)", ce.Index, len(ce.Entries))
@@ -398,6 +405,7 @@ func (sm *raftChainStateMachine) restart() {
 	sm.logDebug("Restarting")
 
 	sm.stopped = false
+	sm.ready = false
 	if sm.n.State() != Closed {
 		return
 	}
@@ -493,6 +501,11 @@ func (sm *raftChainStateMachine) snapshot() {
 		return
 	}
 
+	if sm.safeSnapshots && !sm.ready {
+		sm.logDebug("Skip snapshot, still recovering")
+		return
+	}
+
 	sm.logDebug(
 		"Snapshot (with %d blocks applied, %d since last snapshot)",
 		sm.blocksApplied,
@@ -570,5 +583,9 @@ func newRaftChainStateMachine(s *Server, cfg *RaftConfig, n RaftNode) stateMachi
 	// Initialize empty hash block
 	hashBlock := crc32.NewIEEE()
 
-	return &raftChainStateMachine{s: s, n: n, cfg: cfg, rng: rng, hash: hashBlock}
+	// Set to true to make RCSM ignore snapshot requests during 'recovery'.
+	// i.e. after a restart and before a nil commit entry is consumed from the transitions queue.
+	var safeSnapshots bool
+
+	return &raftChainStateMachine{s: s, n: n, cfg: cfg, rng: rng, hash: hashBlock, safeSnapshots: safeSnapshots}
 }
