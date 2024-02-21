@@ -1728,7 +1728,7 @@ func (s *Server) setSystemAccount(acc *Account) error {
 		sendq:   newIPQueue[*pubMsg](s, "System sendQ"),
 		recvq:   newIPQueue[*inSysMsg](s, "System recvQ"),
 		resetCh: make(chan struct{}),
-		sq:      s.newSendQ(),
+		sq:      s.newSendQ(acc),
 		statsz:  eventsHBInterval,
 		orphMax: 5 * eventsHBInterval,
 		chkOrph: 3 * eventsHBInterval,

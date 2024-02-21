@@ -128,6 +128,7 @@ type raft struct {
 
 	created time.Time // Time that the group was created
 	accName string    // Account name of the asset this raft group is for
+	acc     *Account  // Account that NRG traffic will be sent/received in
 	group   string    // Raft group
 	sd      string    // Store directory
 	id      string    // Node ID
@@ -346,8 +347,6 @@ func (s *Server) startRaftNode(accName string, cfg *RaftConfig, labels pprofLabe
 		s.mu.RUnlock()
 		return nil, ErrNoSysAccount
 	}
-	sq := s.sys.sq
-	sacc := s.sys.account
 	hash := s.sys.shash
 	s.mu.RUnlock()
 
@@ -360,7 +359,17 @@ func (s *Server) startRaftNode(accName string, cfg *RaftConfig, labels pprofLabe
 		return nil, errNoPeerState
 	}
 
-	qpfx := fmt.Sprintf("[ACC:%s] RAFT '%s' ", accName, cfg.Name)
+	nrgAcc, err := s.lookupAccount(accName)
+	if err != nil {
+		return nil, ErrMissingAccount
+	}
+	c := s.createInternalSystemClient()
+	c.registerWithAccount(nrgAcc)
+	if nrgAcc.sq == nil {
+		nrgAcc.sq = s.newSendQ(nrgAcc)
+	}
+
+	qpfx := fmt.Sprintf("[ACC:%s NRG:%s] RAFT '%s' ", accName, nrgAcc.Name, cfg.Name)
 	n := &raft{
 		created:  time.Now(),
 		id:       hash[:idLen],
@@ -375,9 +384,9 @@ func (s *Server) startRaftNode(accName string, cfg *RaftConfig, labels pprofLabe
 		acks:     make(map[uint64]map[string]struct{}),
 		pae:      make(map[uint64]*appendEntry),
 		s:        s,
-		c:        s.createInternalSystemClient(),
+		c:        c,
 		js:       s.getJetStream(),
-		sq:       sq,
+		sq:       nrgAcc.sq,
 		quit:     make(chan struct{}),
 		wtvch:    make(chan struct{}, 1),
 		wpsch:    make(chan struct{}, 1),
@@ -388,11 +397,11 @@ func (s *Server) startRaftNode(accName string, cfg *RaftConfig, labels pprofLabe
 		resp:     newIPQueue[*appendEntryResponse](s, qpfx+"appendEntryResponse"),
 		apply:    newIPQueue[*CommittedEntry](s, qpfx+"committedEntry"),
 		accName:  accName,
+		acc:      nrgAcc,
 		leadc:    make(chan bool, 1),
 		observer: cfg.Observer,
 		extSt:    ps.domainExt,
 	}
-	n.c.registerWithAccount(sacc)
 
 	if atomic.LoadInt32(&s.logging.debug) > 0 {
 		n.dflag = true
@@ -1737,7 +1746,7 @@ func (n *raft) subscribe(subject string, cb msgHandler) (*subscription, error) {
 // Lock should be held.
 func (n *raft) unsubscribe(sub *subscription) {
 	if sub != nil {
-		n.c.processUnsub(sub.sid)
+		n.acc.unsubscribeInternal(sub)
 	}
 }
 
