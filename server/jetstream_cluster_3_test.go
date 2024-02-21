@@ -6555,18 +6555,18 @@ func TestJetStreamClusterSourceWorkingQueueWithLimit(t *testing.T) {
 	defer nc.Close()
 
 	if _, err := js.AddStream(&nats.StreamConfig{Name: "test", Subjects: []string{"test"}, Replicas: 3}); err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		require_NoError(t, err)
 	}
 
 	if _, err := js.AddStream(&nats.StreamConfig{Name: "wq", MaxMsgs: 100, Discard: nats.DiscardNew, Retention: nats.WorkQueuePolicy,
 		Sources: []*nats.StreamSource{{Name: "test"}}, Replicas: 3}); err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		require_NoError(t, err)
 	}
 
 	sendBatch := func(subject string, n int) {
 		for i := 0; i < n; i++ {
 			if _, err := js.Publish(subject, []byte("OK")); err != nil {
-				t.Fatalf("Unexpected publish error: %v", err)
+				require_NoError(t, err)
 			}
 		}
 	}
