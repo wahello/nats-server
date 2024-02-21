@@ -1746,7 +1746,7 @@ func (n *raft) subscribe(subject string, cb msgHandler) (*subscription, error) {
 // Lock should be held.
 func (n *raft) unsubscribe(sub *subscription) {
 	if sub != nil {
-		n.acc.unsubscribeInternal(sub)
+		n.c.processUnsub(sub.sid)
 	}
 }
 
