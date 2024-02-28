@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/antithesishq/antithesis-sdk-go/assert"
 	"github.com/nats-io/nats-server/v2/internal/fastrand"
 
 	"github.com/minio/highwayhash"
@@ -922,6 +923,10 @@ func (n *raft) Applied(index uint64) (entries uint64, bytes uint64) {
 
 	// Ignore if not applicable. This can happen during a reset.
 	if index > n.commit {
+		assert.Unreachable("Index is higher than commit", map[string]any{
+			"index":    index,
+			"n.commit": n.commit,
+		})
 		return 0, 0
 	}
 
