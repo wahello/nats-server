@@ -3,7 +3,7 @@ module github.com/nats-io/nats-server/v2
 go 1.20
 
 require (
-	github.com/antithesishq/antithesis-sdk-go v0.2.9
+	github.com/antithesishq/antithesis-sdk-go v0.2.11
 	github.com/klauspost/compress v1.17.7
 	github.com/minio/highwayhash v1.0.2
 	github.com/nats-io/jwt/v2 v2.5.5
