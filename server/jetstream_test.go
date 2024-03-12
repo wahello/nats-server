@@ -23374,6 +23374,7 @@ func TestJetStreamConsumerPedanticMode(t *testing.T) {
 	tests := []struct {
 		name        string
 		givenConfig ConsumerConfig
+		givenLimits nats.StreamConsumerLimits
 		shouldError bool
 		pedantic    bool
 		replicas    int
@@ -23382,6 +23383,10 @@ func TestJetStreamConsumerPedanticMode(t *testing.T) {
 			name: "default_non_pedantic",
 			givenConfig: ConsumerConfig{
 				Durable: "durable",
+			},
+			givenLimits: nats.StreamConsumerLimits{
+				InactiveThreshold: time.Minute,
+				MaxAckPending:     100,
 			},
 			shouldError: false,
 			pedantic:    false,
@@ -23392,6 +23397,10 @@ func TestJetStreamConsumerPedanticMode(t *testing.T) {
 			givenConfig: ConsumerConfig{
 				Durable: "durable",
 			},
+			givenLimits: nats.StreamConsumerLimits{
+				InactiveThreshold: time.Minute,
+				MaxAckPending:     100,
+			},
 			shouldError: true,
 			pedantic:    true,
 			replicas:    1,
@@ -23401,6 +23410,10 @@ func TestJetStreamConsumerPedanticMode(t *testing.T) {
 			givenConfig: ConsumerConfig{
 				Durable: "durable",
 			},
+			givenLimits: nats.StreamConsumerLimits{
+				InactiveThreshold: time.Minute,
+				MaxAckPending:     100,
+			},
 			shouldError: false,
 			pedantic:    false,
 			replicas:    3,
@@ -23409,6 +23422,22 @@ func TestJetStreamConsumerPedanticMode(t *testing.T) {
 			name: "default_pedantic_clustered",
 			givenConfig: ConsumerConfig{
 				Durable: "durable",
+			},
+			givenLimits: nats.StreamConsumerLimits{
+				InactiveThreshold: time.Minute,
+				MaxAckPending:     100,
+			},
+			shouldError: true,
+			pedantic:    true,
+			replicas:    3,
+		},
+		{
+			name: "default_pedantic_clustered_inactive_threshold",
+			givenConfig: ConsumerConfig{
+				Durable: "durable",
+			},
+			givenLimits: nats.StreamConsumerLimits{
+				InactiveThreshold: time.Minute,
 			},
 			shouldError: true,
 			pedantic:    true,
